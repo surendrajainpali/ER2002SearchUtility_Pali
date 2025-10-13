@@ -1,8 +1,8 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="hi">
 <head>
   <meta charset="UTF-8">
-  <title>ER2002 Search Utility</title>
+  <title>विधानसभा मतदाता खोज</title>
   <style>
     body {
       font-family: sans-serif;
@@ -12,88 +12,59 @@
       background-color: #ffffff;
       color: #000000;
     }
-
     h2 {
-      background-color: #ffffff;
       color: #0077cc;
-      padding: 12px;
-      border-radius: 6px;
       text-align: center;
-      border: 1px solid #ccc;
+      margin-bottom: 20px;
     }
-
     select, input, button {
       width: 100%;
       padding: 10px;
       font-size: 16px;
       margin-bottom: 10px;
     }
-
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 14px;
       margin-top: 10px;
     }
-
     th, td {
       border: 1px solid #ccc;
       padding: 8px;
       text-align: left;
     }
-
     th {
       background-color: #f2f2f2;
     }
-
     tr:nth-child(even) {
       background-color: #fafafa;
     }
-
     #status {
-      font-size: 14px;
-      margin-bottom: 10px;
       font-weight: bold;
+      margin-bottom: 10px;
     }
-
-    #status.loading {
-      color: #cc0000;
-    }
-
-    #status.loaded {
-      color: #006400;
-    }
-
     #pagination {
       margin-top: 20px;
       text-align: center;
     }
-
     #pagination button {
       padding: 6px 12px;
       margin: 0 5px;
       font-size: 14px;
     }
-
     mark {
       background-color: yellow;
       font-weight: bold;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      body {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-      }
     }
   </style>
 </head>
 <body>
 
-<h2>🔍 विधानसभा निर्वाचन क्षेत्र खोज</h2>
+<h2>🔍 विधानसभा मतदाता खोज</h2>
 
 <select id="constituencySelect">
-  <option value="">🔽 विधानसभा चुनें</option>
+  <option value="">🔽 सभी विधानसभा</option>
   <option value="117-सोजत">117-सोजत</option>
   <option value="118-पाली">118-पाली</option>
   <option value="119-मारवाड़ जंक्शन">119-मारवाड़ जंक्शन</option>
@@ -101,7 +72,7 @@
   <option value="121-सुमेरपुर">121-सुमेरपुर</option>
 </select>
 
-<p id="status">कृपया विधानसभा चुनें...</p>
+<p id="status">डेटा लोड हो रहा है...</p>
 
 <input type="text" id="oldAcInput" placeholder="Old AC No.">
 <input type="text" id="partNoInput" placeholder="Part No.">
@@ -243,3 +214,30 @@
     };
 
     pagination.appendChild(prevBtn);
+    pagination.appendChild(nextBtn);
+  }
+
+  constituencySelect.addEventListener('change', () => {
+    const selected = constituencySelect.value;
+    if (!selected) return loadAllData();
+
+    statusEl.textContent = '🔄 डेटा लोड हो रहा है...';
+    statusEl.classList.add('loading');
+
+    const chunkCount = constituencyChunks[selected];
+    const chunkPaths = Array.from({ length: chunkCount }, (_, i) => `data/${selected}/data${i + 1}.json`);
+
+    Promise.allSettled(
+      chunkPaths.map(path =>
+        fetch(path).then(r => r.ok ? r.json() : []).catch(() => [])
+      )
+    ).then(results => {
+      data = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+      searchBox.disabled = false;
+      oldAcInput.value = '';
+      partNoInput.value = '';
+      searchBox.value = '';
+      currentPage = 1;
+      filterData();
+      renderPage();
+      statusEl
