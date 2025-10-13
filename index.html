@@ -225,7 +225,9 @@
     statusEl.classList.add('loading');
 
     const chunkCount = constituencyChunks[selected];
-    const chunkPaths = Array.from({ length: chunkCount }, (_, i) => `data/${selected}/data${i + 1}.json`);
+    const chunkPaths = Array.from({ length: chunkCount }, (_, i) =>
+      `data/${encodeURIComponent(selected)}/data${i + 1}.json`);
+
 
     Promise.allSettled(
       chunkPaths.map(path =>
@@ -241,4 +243,5 @@
       filterData();
       renderPage();
       statusEl
+
 
