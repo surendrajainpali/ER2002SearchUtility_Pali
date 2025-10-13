@@ -1,0 +1,245 @@
+﻿<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <title>ER2002 Search Utility</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+      background-color: #ffffff;
+      color: #000000;
+    }
+
+    h2 {
+      background-color: #ffffff;
+      color: #0077cc;
+      padding: 12px;
+      border-radius: 6px;
+      text-align: center;
+      border: 1px solid #ccc;
+    }
+
+    select, input, button {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f2f2f2;
+    }
+
+    tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+
+    #status {
+      font-size: 14px;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    #status.loading {
+      color: #cc0000;
+    }
+
+    #status.loaded {
+      color: #006400;
+    }
+
+    #pagination {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    #pagination button {
+      padding: 6px 12px;
+      margin: 0 5px;
+      font-size: 14px;
+    }
+
+    mark {
+      background-color: yellow;
+      font-weight: bold;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<h2>🔍 विधानसभा निर्वाचन क्षेत्र खोज</h2>
+
+<select id="constituencySelect">
+  <option value="">🔽 विधानसभा चुनें</option>
+  <option value="117-सोजत">117-सोजत</option>
+  <option value="118-पाली">118-पाली</option>
+  <option value="119-मारवाड़ जंक्शन">119-मारवाड़ जंक्शन</option>
+  <option value="120-बाली">120-बाली</option>
+  <option value="121-सुमेरपुर">121-सुमेरपुर</option>
+</select>
+
+<p id="status">कृपया विधानसभा चुनें...</p>
+
+<input type="text" id="oldAcInput" placeholder="Old AC No.">
+<input type="text" id="partNoInput" placeholder="Part No.">
+<input type="text" id="searchBox" placeholder="नाम, संबंधी का नाम या EPIC..." disabled />
+<button id="clearFilters">🧹 फ़िल्टर साफ़ करें</button>
+
+<table id="resultsTable">
+  <thead>
+    <tr>
+      <th>Old AC No.</th>
+      <th>Part No.</th>
+      <th>S. NO.</th>
+      <th>H. NO.</th>
+      <th>Name</th>
+      <th>Relative Name</th>
+      <th>Age</th>
+      <th>EPIC</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div id="pagination"></div>
+
+<script>
+  const statusEl = document.getElementById('status');
+  const searchBox = document.getElementById('searchBox');
+  const oldAcInput = document.getElementById('oldAcInput');
+  const partNoInput = document.getElementById('partNoInput');
+  const tableBody = document.querySelector('#resultsTable tbody');
+  const pagination = document.getElementById('pagination');
+  const constituencySelect = document.getElementById('constituencySelect');
+
+  let data = [];
+  let filtered = [];
+  let currentPage = 1;
+  const resultsPerPage = 20;
+
+  const constituencyChunks = {
+    '117-सोजत': 5,
+    '118-पाली': 9,
+    '119-मारवाड़ जंक्शन': 6,
+    '120-बाली': 4,
+    '121-सुमेरपुर': 7
+  };
+
+  function normalize(value) {
+    return value !== undefined && value !== null
+      ? String(value).replace(/\s+/g, ' ').trim().toLowerCase()
+      : '';
+  }
+
+  function filterData() {
+    const nameQuery = normalize(searchBox.value);
+    const oldAcQuery = normalize(oldAcInput.value);
+    const partNoQuery = normalize(partNoInput.value);
+
+    filtered = data.filter(row => {
+      const rowOldAc = normalize(row['Old AC No.']);
+      const rowPartNo = normalize(row['Part No.']);
+      const rowName = normalize(row['Name']);
+      const rowRelative = normalize(row['Relative Name']);
+      const rowEpic = normalize(row['EPIC']);
+
+      const matchName =
+        rowName.includes(nameQuery) ||
+        rowRelative.includes(nameQuery) ||
+        rowEpic.includes(nameQuery);
+
+      const matchOldAc = oldAcQuery === '' || rowOldAc === oldAcQuery;
+      const matchPartNo = partNoQuery === '' || rowPartNo === partNoQuery;
+
+      if (nameQuery === '' && oldAcQuery === '' && partNoQuery === '') return true;
+      if (nameQuery !== '' && oldAcQuery === '' && partNoQuery === '') return matchName;
+      if (nameQuery === '' && (oldAcQuery !== '' || partNoQuery !== '')) return matchOldAc && matchPartNo;
+      return matchName && matchOldAc && matchPartNo;
+    });
+  }
+
+  function renderPage() {
+    tableBody.innerHTML = '';
+    const start = (currentPage - 1) * resultsPerPage;
+    const end = start + resultsPerPage;
+    const pageData = filtered.slice(start, end);
+
+    if (pageData.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="8">कोई परिणाम नहीं मिला</td></tr>';
+      pagination.innerHTML = '';
+      return;
+    }
+
+    pageData.forEach(row => {
+      const tr = document.createElement('tr');
+      ['Old AC No.', 'Part No.', 'S. NO.', 'H. NO.', 'Name', 'Relative Name', 'Age', 'EPIC'].forEach(key => {
+        const raw = row[key] || '';
+        const normalizedRaw = normalize(raw);
+        let highlighted = raw;
+
+        const nameQuery = normalize(searchBox.value);
+        if (nameQuery && ['Name', 'Relative Name', 'EPIC'].includes(key)) {
+          const index = normalizedRaw.indexOf(nameQuery);
+          if (index !== -1) {
+            const start = raw.substring(0, index);
+            const match = raw.substring(index, index + nameQuery.length);
+            const end = raw.substring(index + nameQuery.length);
+            highlighted = `${start}<mark>${match}</mark>${end}`;
+          }
+        }
+
+        const td = document.createElement('td');
+        td.innerHTML = highlighted;
+        tr.appendChild(td);
+      });
+      tableBody.appendChild(tr);
+    });
+
+    updatePaginationControls();
+  }
+
+  function updatePaginationControls() {
+    pagination.innerHTML = '';
+    const totalPages = Math.ceil(filtered.length / resultsPerPage);
+    if (totalPages <= 1) return;
+
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '⬅️ पिछला';
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.onclick = () => {
+      currentPage--;
+      renderPage();
+    };
+
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '➡️ अगला';
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.onclick = () => {
+      currentPage++;
+      renderPage();
+    };
+
+    pagination.appendChild(prevBtn);
