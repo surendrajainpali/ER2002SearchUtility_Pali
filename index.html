@@ -1,102 +1,3 @@
-<!DOCTYPE html>
-<html lang="hi">
-<head>
-  <meta charset="UTF-8">
-  <title>विधानसभा मतदाता खोज</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 20px;
-      max-width: 800px;
-      margin: auto;
-      background-color: #ffffff;
-      color: #000000;
-    }
-    h2 {
-      color: #0077cc;
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    select, input, button {
-      width: 100%;
-      padding: 10px;
-      font-size: 16px;
-      margin-bottom: 10px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: left;
-    }
-    th {
-      background-color: #f2f2f2;
-    }
-    tr:nth-child(even) {
-      background-color: #fafafa;
-    }
-    #status {
-      font-weight: bold;
-      margin-bottom: 10px;
-    }
-    #pagination {
-      margin-top: 20px;
-      text-align: center;
-    }
-    #pagination button {
-      padding: 6px 12px;
-      margin: 0 5px;
-      font-size: 14px;
-    }
-    mark {
-      background-color: yellow;
-      font-weight: bold;
-    }
-  </style>
-</head>
-<body>
-
-<h2>🔍 विधानसभा मतदाता खोज</h2>
-
-<select id="constituencySelect">
-  <option value="">🔽 सभी विधानसभा</option>
-  <option value="117-सोजत">117-सोजत</option>
-  <option value="118-पाली">118-पाली</option>
-  <option value="119-मारवाड़ जंक्शन">119-मारवाड़ जंक्शन</option>
-  <option value="120-बाली">120-बाली</option>
-  <option value="121-सुमेरपुर">121-सुमेरपुर</option>
-</select>
-
-<p id="status">डेटा लोड हो रहा है...</p>
-
-<input type="text" id="oldAcInput" placeholder="Old AC No.">
-<input type="text" id="partNoInput" placeholder="Part No.">
-<input type="text" id="searchBox" placeholder="नाम, संबंधी का नाम या EPIC..." disabled />
-<button id="clearFilters">🧹 फ़िल्टर साफ़ करें</button>
-
-<table id="resultsTable">
-  <thead>
-    <tr>
-      <th>Old AC No.</th>
-      <th>Part No.</th>
-      <th>S. NO.</th>
-      <th>H. NO.</th>
-      <th>Name</th>
-      <th>Relative Name</th>
-      <th>Age</th>
-      <th>EPIC</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
-
-<div id="pagination"></div>
-
 <script>
   const statusEl = document.getElementById('status');
   const searchBox = document.getElementById('searchBox');
@@ -159,7 +60,7 @@
     const pageData = filtered.slice(start, end);
 
     if (pageData.length === 0) {
-      tableBody.innerHTML = '<tr><td colspan="8">कोई परिणाम नहीं मिला</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="8">⚠️ कोई परिणाम नहीं मिला</td></tr>';
       pagination.innerHTML = '';
       return;
     }
@@ -226,8 +127,8 @@
 
     const chunkCount = constituencyChunks[selected];
     const chunkPaths = Array.from({ length: chunkCount }, (_, i) =>
-      `data/${encodeURIComponent(selected)}/data${i + 1}.json`);
-
+      `data/${encodeURIComponent(selected)}/data${i + 1}.json`
+    );
 
     Promise.allSettled(
       chunkPaths.map(path =>
@@ -242,6 +143,55 @@
       currentPage = 1;
       filterData();
       renderPage();
-      statusEl
+      statusEl.textContent = `✅ कुल ${data.length} रिकॉर्ड लोड हुए (${selected})`;
+      statusEl.classList.remove('loading');
+      statusEl.classList.add('loaded');
+    });
+  });
 
+  function loadAllData() {
+    statusEl.textContent = '🔄 सभी डेटा लोड हो रहे हैं...';
+    statusEl.classList.add('loading');
 
+    const allChunkPaths = Object.entries(constituencyChunks).flatMap(([name, count]) =>
+      Array.from({ length: count }, (_, i) => `data/${encodeURIComponent(name)}/data${i + 1}.json`)
+    );
+
+    Promise.allSettled(
+      allChunkPaths.map(path =>
+        fetch(path).then(r => r.ok ? r.json() : []).catch(() => [])
+      )
+    ).then(results => {
+      data = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+      searchBox.disabled = false;
+      oldAcInput.value = '';
+      partNoInput.value = '';
+      searchBox.value = '';
+      currentPage = 1;
+      filterData();
+      renderPage();
+      statusEl.textContent = `✅ कुल ${data.length} रिकॉर्ड लोड हुए (सभी विधानसभा)`;
+      statusEl.classList.remove('loading');
+      statusEl.classList.add('loaded');
+    });
+  }
+
+  [searchBox, oldAcInput, partNoInput].forEach(input =>
+    input.addEventListener('input', () => {
+      currentPage = 1;
+      filterData();
+      renderPage();
+    })
+  );
+
+  document.getElementById('clearFilters').addEventListener('click', () => {
+    oldAcInput.value = '';
+    partNoInput.value = '';
+    searchBox.value = '';
+    currentPage = 1;
+    filterData();
+    renderPage();
+  });
+
+  window.addEventListener('DOMContentLoaded', loadAllData);
+</script>
