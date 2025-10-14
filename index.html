@@ -134,6 +134,10 @@
       chunkPaths.map(path =>
         fetch(path).then(r => r.ok ? r.json() : []).catch(() => [])
       )
+     console.log('Fetch results:', results);
+    console.log('Loaded records:', data.length);
+    console.log('First record:', data[0]);
+ 
     ).then(results => {
       data = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
       searchBox.disabled = false;
@@ -195,3 +199,4 @@
 
   window.addEventListener('DOMContentLoaded', loadAllData);
 </script>
+
