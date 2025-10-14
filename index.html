@@ -134,12 +134,17 @@
       chunkPaths.map(path =>
         fetch(path).then(r => r.ok ? r.json() : []).catch(() => [])
       )
-     console.log('Fetch results:', results);
-    console.log('Loaded records:', data.length);
-    console.log('First record:', data[0]);
- 
     ).then(results => {
-      data = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+      console.log('Chunk paths:', chunkPaths);
+      console.log('Fetch results:', results);
+    
+      data = results
+        .filter(r => r.status === 'fulfilled')
+        .flatMap(r => r.value);
+    
+      console.log('Loaded records:', data.length);
+      console.log('First record:', data[0]);
+    
       searchBox.disabled = false;
       oldAcInput.value = '';
       partNoInput.value = '';
@@ -147,37 +152,39 @@
       currentPage = 1;
       filterData();
       renderPage();
+    
       statusEl.textContent = `✅ कुल ${data.length} रिकॉर्ड लोड हुए (${selected})`;
       statusEl.classList.remove('loading');
       statusEl.classList.add('loaded');
     });
-  });
-
-  function loadAllData() {
-    statusEl.textContent = '🔄 सभी डेटा लोड हो रहे हैं...';
-    statusEl.classList.add('loading');
-
-    const allChunkPaths = Object.entries(constituencyChunks).flatMap(([name, count]) =>
-      Array.from({ length: count }, (_, i) => `data/${encodeURIComponent(name)}/data${i + 1}.json`)
-    );
-
-    Promise.allSettled(
-      allChunkPaths.map(path =>
-        fetch(path).then(r => r.ok ? r.json() : []).catch(() => [])
-      )
-    ).then(results => {
-      data = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
-      searchBox.disabled = false;
-      oldAcInput.value = '';
-      partNoInput.value = '';
-      searchBox.value = '';
-      currentPage = 1;
-      filterData();
-      renderPage();
-      statusEl.textContent = `✅ कुल ${data.length} रिकॉर्ड लोड हुए (सभी विधानसभा)`;
-      statusEl.classList.remove('loading');
-      statusEl.classList.add('loaded');
-    });
+    
+      });
+    
+      function loadAllData() {
+        statusEl.textContent = '🔄 सभी डेटा लोड हो रहे हैं...';
+        statusEl.classList.add('loading');
+    
+        const allChunkPaths = Object.entries(constituencyChunks).flatMap(([name, count]) =>
+          Array.from({ length: count }, (_, i) => `data/${encodeURIComponent(name)}/data${i + 1}.json`)
+        );
+    
+        Promise.allSettled(
+          allChunkPaths.map(path =>
+            fetch(path).then(r => r.ok ? r.json() : []).catch(() => [])
+          )
+        ).then(results => {
+          data = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+          searchBox.disabled = false;
+          oldAcInput.value = '';
+          partNoInput.value = '';
+          searchBox.value = '';
+          currentPage = 1;
+          filterData();
+          renderPage();
+          statusEl.textContent = `✅ कुल ${data.length} रिकॉर्ड लोड हुए (सभी विधानसभा)`;
+          statusEl.classList.remove('loading');
+          statusEl.classList.add('loaded');
+        });
   }
 
   [searchBox, oldAcInput, partNoInput].forEach(input =>
@@ -199,4 +206,5 @@
 
   window.addEventListener('DOMContentLoaded', loadAllData);
 </script>
+
 
