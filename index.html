@@ -173,6 +173,8 @@
 
   async function fetchChunks(acName, count, progressOffset = 0, totalChunks = 1) {
     const results = [];
+    let completed = 0;
+  
     for (let i = 1; i <= count; i++) {
       const path = `data/${acName}/data${i}.json`;
       try {
@@ -180,10 +182,13 @@
         const json = res.ok ? await res.json() : [];
         results.push(...json);
       } catch {
+        console.warn(`❌ Failed to load: ${path}`);
         // skip failed chunk
       }
-      updateProgress(progressOffset + i, totalChunks);
+      completed++;
+      updateProgress(progressOffset + completed, totalChunks);
     }
+  
     return results;
   }
 
@@ -358,6 +363,7 @@
 
 </body>
 </html>
+
 
 
 
