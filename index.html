@@ -80,11 +80,6 @@
       margin-bottom: 10px;
     }
 
-    #progressText {
-      font-size: 16px;
-      color: #0077cc;
-    }
-
   </style>
 </head>
 <body>
@@ -92,7 +87,6 @@
 <h2>🔍 पाली जिले की 2002 की मतदाता सूचियों से मतदाताओं की खोज</h2>
 <p id="status">डेटा लोड हो रहा है...</p>
 <div id="spinner" style="display: none;">
-  <div id="progressText" style="margin-top: 8px; font-weight: bold;">0%</div>
   <svg width="40" height="40" viewBox="0 0 40 40">
     <circle cx="20" cy="20" r="18" stroke="#0077cc" stroke-width="4" fill="none" stroke-linecap="round"
       stroke-dasharray="90" stroke-dashoffset="0">
@@ -158,62 +152,30 @@
   let currentPage = 1;
   const resultsPerPage = 20;
 
-  const progressText = document.getElementById('progressText');
-
-  function updateProgress(current, total) {
-    const percent = Math.round((current / total) * 100);
-    progressText.textContent = `${percent}%`;
-  }
-
   function normalize(value) {
     return value !== undefined && value !== null
       ? String(value).replace(/\s+/g, ' ').trim().toLowerCase()
       : '';
   }
 
-  async function fetchChunks(acName, count, progressOffset = 0, totalChunks = 1) {
-    const results = [];
-    let completed = 0;
-  
+  async function fetchChunks(acName, count) {
+    const promises = [];
     for (let i = 1; i <= count; i++) {
       const path = `data/${acName}/data${i}.json`;
-      try {
-        const res = await fetch(path);
-        const json = res.ok ? await res.json() : [];
-        
-        if (Array.isArray(json)) {
-          results.push(...json);
-        } else {
-          console.warn(`⚠️ Unexpected data format in ${path}`);
-        }
-
-      } catch {
-        console.warn(`❌ Failed to load: ${path}`);
-        // skip failed chunk
-      }
-      completed++;
-      updateProgress(progressOffset + completed, totalChunks);
+      promises.push(fetch(path).then(r => r.ok ? r.json() : []).catch(() => []));
     }
-  
-    return results;
+    const results = await Promise.allSettled(promises);
+    return results.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
   }
 
-  async function loadAllData() {
+   async function loadAllData() {
     showSpinner();
     statusEl.textContent = 'डेटा लोड हो रहा है...';
     statusEl.classList.add('loading');
   
-    const totalChunks = Object.values(acChunkMap).reduce((a, b) => a + b, 0);
-    let progressOffset = 0;
-    const allResults = [];
-  
-    for (const [ac, count] of Object.entries(acChunkMap)) {
-      const result = await fetchChunks(ac, count, progressOffset, totalChunks);
-      allResults.push(...result);
-      progressOffset += count;
-    }
-  
-    allData = allResults;
+    const allPromises = Object.entries(acChunkMap).map(([ac, count]) => fetchChunks(ac, count));
+    const allResults = await Promise.all(allPromises);
+    allData = allResults.flat();
     data = allData;
     filtered = data;
     searchBox.disabled = false;
@@ -224,7 +186,7 @@
     statusEl.classList.remove('loading');
     statusEl.classList.add('loaded');
     hideSpinner();
-  }
+   }
 
 
   async function loadSelectedAC(acName) {
@@ -369,9 +331,6 @@
 
 </body>
 </html>
-
-
-
 
 
 
