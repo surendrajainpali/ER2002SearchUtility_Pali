@@ -180,7 +180,13 @@
       try {
         const res = await fetch(path);
         const json = res.ok ? await res.json() : [];
-        results.push(...json);
+        
+        if (Array.isArray(json)) {
+          results.push(...json);
+        } else {
+          console.warn(`⚠️ Unexpected data format in ${path}`);
+        }
+
       } catch {
         console.warn(`❌ Failed to load: ${path}`);
         // skip failed chunk
@@ -363,6 +369,7 @@
 
 </body>
 </html>
+
 
 
 
