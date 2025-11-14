@@ -75,6 +75,21 @@
       margin-bottom: 10px;
     }
 
+    #resetBtn {
+      display: block;
+      margin: 10px auto;
+      padding: 8px 16px;
+      font-size: 15px;
+      background-color: #0077cc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #resetBtn:hover {
+      background-color: #005fa3;
+    }
+
     footer {
       text-align: center;
       padding: 12px;
@@ -120,6 +135,9 @@
 <input type="text" id="relativeInput" placeholder="संबंधी का नाम...">
 <input type="text" id="epicInput" placeholder="EPIC...">
 
+<!-- Reset button -->
+<button id="resetBtn">फ़िल्टर रीसेट</button>
+
 <table id="resultsTable">
   <thead>
     <tr>
@@ -153,6 +171,7 @@
   const tableBody  = document.querySelector('#resultsTable tbody');
   const pagination = document.getElementById('pagination');
   const spinner = document.getElementById('spinner');
+  const resetBtn = document.getElementById('resetBtn');
 
   const acChunkMap = {
     "117-सोजत": 12,
@@ -262,7 +281,6 @@
       const matchRelative = relativeQuery === '' || rowRelative.includes(relativeQuery);
       const matchEpic     = epicQuery === ''     || rowEpic.includes(epicQuery);
 
-      // All active criteria must match
       return matchOldAc && matchPartNo && matchName && matchRelative && matchEpic;
     });
   }
@@ -318,7 +336,6 @@
     renderPage();
   }
 
-  // Debounced search on text inputs
   function debounce(fn, delay = 300) {
     let t;
     return function(...args) {
@@ -335,6 +352,26 @@
 
   oldAcInput.addEventListener('input', triggerSearch);
   partNoInput.addEventListener('input', triggerSearch);
+
+  resetBtn.addEventListener('click', () => {
+    acSelect.value = 'all';
+    oldAcInput.value = '';
+    partNoInput.value = '';
+    nameInput.value = '';
+    relativeInput.value = '';
+    epicInput.value = '';
+
+    data = allData;
+    filtered = data;
+    currentPage = 1;
+
+    filterData();
+    renderPage();
+
+    statusEl.textContent = `✅ सभी क्षेत्रों से ${data.length} रिकॉर्ड लोड हुए`;
+    statusEl.classList.remove('loading');
+    statusEl.classList.add('loaded');
+  });
 
   // Initial load
   loadAllData();
