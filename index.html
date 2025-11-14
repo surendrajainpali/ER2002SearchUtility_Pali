@@ -103,7 +103,6 @@
 </div>
 
 <label for="acSelect" style="font-weight: bold;">🗳️ कृपया अपना वर्तमान विधानसभा क्षेत्र चुनें:</label>
-
 <select id="acSelect">
   <option value="all">सभी विधानसभा क्षेत्र</option>
   <option value="117-सोजत">117-सोजत</option>
@@ -115,7 +114,11 @@
 
 <input type="text" id="oldAcInput" placeholder="Old AC No.">
 <input type="text" id="partNoInput" placeholder="Part No.">
-<input type="text" id="searchBox" placeholder="नाम, संबंधी का नाम या EPIC..." disabled />
+
+<!-- Separate search boxes -->
+<input type="text" id="nameInput" placeholder="नाम...">
+<input type="text" id="relativeInput" placeholder="संबंधी का नाम...">
+<input type="text" id="epicInput" placeholder="EPIC...">
 
 <table id="resultsTable">
   <thead>
@@ -142,9 +145,11 @@
 <script>
   const statusEl = document.getElementById('status');
   const acSelect  = document.getElementById('acSelect');
-  const searchBox = document.getElementById('searchBox');
   const oldAcInput = document.getElementById('oldAcInput');
   const partNoInput = document.getElementById('partNoInput');
+  const nameInput = document.getElementById('nameInput');
+  const relativeInput = document.getElementById('relativeInput');
+  const epicInput = document.getElementById('epicInput');
   const tableBody  = document.querySelector('#resultsTable tbody');
   const pagination = document.getElementById('pagination');
   const spinner = document.getElementById('spinner');
@@ -164,9 +169,7 @@
   const resultsPerPage = 20;
 
   function normalize(value) {
-    return value !== undefined && value !== null
-      ? String(value).replace(/\s+/g, ' ').trim().toLowerCase()
-      : '';
+    return value ? String(value).replace(/\s+/g, ' ').trim().toLowerCase() : '';
   }
 
   function showSpinner() { spinner.style.display = 'block'; }
@@ -176,73 +179,50 @@
     const promises = [];
     for (let i = 1; i <= count; i++) {
       const path = `data/${acName}/data${i}.json`;
-      promises.push(
-        fetch(path)
-          .then(r => r.ok ? r.json() : [])
-          .catch(() => [])
-      );
+      promises.push(fetch(path).then(r => r.ok ? r.json() : []).catch(() => []));
     }
     const results = await Promise.allSettled(promises);
-    return results
-      .filter(r => r.status === 'fulfilled')
-      .flatMap(r => r.value);
+    return results.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
   }
 
   async function loadAllData() {
-    try {
-      showSpinner();
-      statusEl.textContent = 'डेटा लोड हो रहा है...';
-      statusEl.classList.add('loading');
+    showSpinner();
+    statusEl.textContent = 'डेटा लोड हो रहा है...';
+    statusEl.classList.add('loading');
 
-      const allPromises = Object.entries(acChunkMap)
-        .map(([ac, count]) => fetchChunks(ac, count));
+    const allPromises = Object.entries(acChunkMap).map(([ac, count]) => fetchChunks(ac, count));
+    const allResults = await Promise.all(allPromises);
 
-      const allResults = await Promise.all(allPromises);
-      allData = allResults.flat();
-      data = allData;
-      filtered = data;
+    allData = allResults.flat();
+    data = allData;
+    filtered = data;
 
-      searchBox.disabled = false;
-      filterData();
-      renderPage();
+    filterData();
+    renderPage();
 
-      statusEl.textContent = `✅ कुल ${data.length} रिकॉर्ड लोड हुए`;
-      statusEl.classList.remove('loading');
-      statusEl.classList.add('loaded');
-    } catch (e) {
-      statusEl.textContent = '❌ डेटा लोड करने में समस्या आई';
-      statusEl.classList.remove('loaded');
-      statusEl.classList.add('loading');
-      console.error(e);
-    } finally {
-      hideSpinner();
-    }
+    statusEl.textContent = `✅ कुल ${data.length} रिकॉर्ड लोड हुए`;
+    statusEl.classList.remove('loading');
+    statusEl.classList.add('loaded');
+    hideSpinner();
   }
 
   async function loadSelectedAC(acName) {
-    try {
-      showSpinner();
-      statusEl.textContent = `${acName} से डेटा लोड हो रहा है...`;
-      statusEl.classList.add('loading');
+    showSpinner();
+    statusEl.textContent = `${acName} से डेटा लोड हो रहा है...`;
+    statusEl.classList.add('loading');
 
-      const count = acChunkMap[acName];
-      data = await fetchChunks(acName, count);
-      filtered = data;
-      currentPage = 1;
+    const count = acChunkMap[acName];
+    data = await fetchChunks(acName, count);
+    filtered = data;
+    currentPage = 1;
 
-      filterData();
-      renderPage();
+    filterData();
+    renderPage();
 
-      statusEl.textContent = `✅ ${acName} से ${data.length} रिकॉर्ड लोड हुए`;
-      statusEl.classList.remove('loading');
-      statusEl.classList.add('loaded');
-    } catch (e) {
-      statusEl.textContent = `❌ ${acName} का डेटा लोड नहीं हुआ`;
-      statusEl.classList.add('loading');
-      console.error(e);
-    } finally {
-      hideSpinner();
-    }
+    statusEl.textContent = `✅ ${acName} से ${data.length} रिकॉर्ड लोड हुए`;
+    statusEl.classList.remove('loading');
+    statusEl.classList.add('loaded');
+    hideSpinner();
   }
 
   acSelect.addEventListener('change', () => {
@@ -262,27 +242,28 @@
   });
 
   function filterData() {
-    const nameQuery   = normalize(searchBox.value);
-    const oldAcQuery  = normalize(oldAcInput.value);
-    const partNoQuery = normalize(partNoInput.value);
+    const oldAcQuery    = normalize(oldAcInput.value);
+    const partNoQuery   = normalize(partNoInput.value);
+    const nameQuery     = normalize(nameInput.value);
+    const relativeQuery = normalize(relativeInput.value);
+    const epicQuery     = normalize(epicInput.value);
 
     filtered = data.filter(row => {
-      const rowOldAc   = normalize(row['Old AC No.']);
-      const rowPartNo  = normalize(row['Part No.']);
-      const rowName    = normalize(row['Name']);
-      const rowRelative= normalize(row['Relative Name']);
-      const rowEpic    = normalize(row['EPIC']);
-
-      const matchName =
-        nameQuery === '' ||
-        rowName.includes(nameQuery) ||
-        rowRelative.includes(nameQuery) ||
-        rowEpic.includes(nameQuery);
+      const rowOldAc    = normalize(row['Old AC No.']);
+      const rowPartNo   = normalize(row['Part No.']);
+      const rowName     = normalize(row['Name']);
+      const rowRelative = normalize(row['Relative Name']);
+      const rowEpic     = normalize(row['EPIC']);
 
       const matchOldAc  = oldAcQuery === ''  || rowOldAc === oldAcQuery;
       const matchPartNo = partNoQuery === '' || rowPartNo === partNoQuery;
 
-      return matchName && matchOldAc && matchPartNo;
+      const matchName     = nameQuery === ''     || rowName.includes(nameQuery);
+      const matchRelative = relativeQuery === '' || rowRelative.includes(relativeQuery);
+      const matchEpic     = epicQuery === ''     || rowEpic.includes(epicQuery);
+
+      // All active criteria must match
+      return matchOldAc && matchPartNo && matchName && matchRelative && matchEpic;
     });
   }
 
@@ -337,11 +318,20 @@
     renderPage();
   }
 
-  // Debounced search
-  searchBox.addEventListener('input', () => {
-    clearTimeout(window.debounceTimer);
-    window.debounceTimer = setTimeout(triggerSearch, 300);
-  });
+  // Debounced search on text inputs
+  function debounce(fn, delay = 300) {
+    let t;
+    return function(...args) {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+
+  const debouncedTrigger = debounce(triggerSearch, 300);
+
+  nameInput.addEventListener('input', debouncedTrigger);
+  relativeInput.addEventListener('input', debouncedTrigger);
+  epicInput.addEventListener('input', debouncedTrigger);
 
   oldAcInput.addEventListener('input', triggerSearch);
   partNoInput.addEventListener('input', triggerSearch);
