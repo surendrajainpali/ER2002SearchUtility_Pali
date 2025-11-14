@@ -56,13 +56,8 @@
       font-weight: bold;
     }
 
-    #status.loading {
-      color: #cc0000;
-    }
-
-    #status.loaded {
-      color: #006400;
-    }
+    #status.loading { color: #cc0000; }
+    #status.loaded  { color: #006400; }
 
     #pagination {
       margin-top: 20px;
@@ -96,6 +91,7 @@
 
 <h2>🔍 पाली जिले की 2002 की मतदाता सूचियों से मतदाताओं की खोज</h2>
 <p id="status">डेटा लोड हो रहा है...</p>
+
 <div id="spinner" style="display: none;">
   <svg width="40" height="40" viewBox="0 0 40 40">
     <circle cx="20" cy="20" r="18" stroke="#0077cc" stroke-width="4" fill="none" stroke-linecap="round"
@@ -104,3 +100,255 @@
         dur="1s" repeatCount="indefinite" />
     </circle>
   </svg>
+</div>
+
+<label for="acSelect" style="font-weight: bold;">🗳️ कृपया अपना वर्तमान विधानसभा क्षेत्र चुनें:</label>
+
+<select id="acSelect">
+  <option value="all">सभी विधानसभा क्षेत्र</option>
+  <option value="117-सोजत">117-सोजत</option>
+  <option value="118-पाली">118-पाली</option>
+  <option value="119-मारवाड़ जंक्शन">119-मारवाड़ जंक्शन</option>
+  <option value="120-बाली">120-बाली</option>
+  <option value="121-सुमेरपुर">121-सुमेरपुर</option>
+</select>
+
+<input type="text" id="oldAcInput" placeholder="Old AC No.">
+<input type="text" id="partNoInput" placeholder="Part No.">
+<input type="text" id="searchBox" placeholder="नाम, संबंधी का नाम या EPIC..." disabled />
+
+<table id="resultsTable">
+  <thead>
+    <tr>
+      <th>Old AC No.</th>
+      <th>Part No.</th>
+      <th>S. NO.</th>
+      <th>H. NO.</th>
+      <th>Name</th>
+      <th>Relative Name</th>
+      <th>Age</th>
+      <th>EPIC</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div id="pagination"></div>
+
+<footer>
+  Developed By : सुरेन्द्र जैन, अति. नोडल अधिकारी, जिला निर्वाचन कार्यालय, पाली (राज.)
+</footer>
+
+<script>
+  const statusEl = document.getElementById('status');
+  const acSelect  = document.getElementById('acSelect');
+  const searchBox = document.getElementById('searchBox');
+  const oldAcInput = document.getElementById('oldAcInput');
+  const partNoInput = document.getElementById('partNoInput');
+  const tableBody  = document.querySelector('#resultsTable tbody');
+  const pagination = document.getElementById('pagination');
+  const spinner = document.getElementById('spinner');
+
+  const acChunkMap = {
+    "117-सोजत": 12,
+    "118-पाली": 9,
+    "119-मारवाड़ जंक्शन": 10,
+    "120-बाली": 12,
+    "121-सुमेरपुर": 11
+  };
+
+  let allData = [];
+  let data = [];
+  let filtered = [];
+  let currentPage = 1;
+  const resultsPerPage = 20;
+
+  function normalize(value) {
+    return value !== undefined && value !== null
+      ? String(value).replace(/\s+/g, ' ').trim().toLowerCase()
+      : '';
+  }
+
+  function showSpinner() { spinner.style.display = 'block'; }
+  function hideSpinner() { spinner.style.display = 'none'; }
+
+  async function fetchChunks(acName, count) {
+    const promises = [];
+    for (let i = 1; i <= count; i++) {
+      const path = `data/${acName}/data${i}.json`;
+      promises.push(
+        fetch(path)
+          .then(r => r.ok ? r.json() : [])
+          .catch(() => [])
+      );
+    }
+    const results = await Promise.allSettled(promises);
+    return results
+      .filter(r => r.status === 'fulfilled')
+      .flatMap(r => r.value);
+  }
+
+  async function loadAllData() {
+    try {
+      showSpinner();
+      statusEl.textContent = 'डेटा लोड हो रहा है...';
+      statusEl.classList.add('loading');
+
+      const allPromises = Object.entries(acChunkMap)
+        .map(([ac, count]) => fetchChunks(ac, count));
+
+      const allResults = await Promise.all(allPromises);
+      allData = allResults.flat();
+      data = allData;
+      filtered = data;
+
+      searchBox.disabled = false;
+      filterData();
+      renderPage();
+
+      statusEl.textContent = `✅ कुल ${data.length} रिकॉर्ड लोड हुए`;
+      statusEl.classList.remove('loading');
+      statusEl.classList.add('loaded');
+    } catch (e) {
+      statusEl.textContent = '❌ डेटा लोड करने में समस्या आई';
+      statusEl.classList.remove('loaded');
+      statusEl.classList.add('loading');
+      console.error(e);
+    } finally {
+      hideSpinner();
+    }
+  }
+
+  async function loadSelectedAC(acName) {
+    try {
+      showSpinner();
+      statusEl.textContent = `${acName} से डेटा लोड हो रहा है...`;
+      statusEl.classList.add('loading');
+
+      const count = acChunkMap[acName];
+      data = await fetchChunks(acName, count);
+      filtered = data;
+      currentPage = 1;
+
+      filterData();
+      renderPage();
+
+      statusEl.textContent = `✅ ${acName} से ${data.length} रिकॉर्ड लोड हुए`;
+      statusEl.classList.remove('loading');
+      statusEl.classList.add('loaded');
+    } catch (e) {
+      statusEl.textContent = `❌ ${acName} का डेटा लोड नहीं हुआ`;
+      statusEl.classList.add('loading');
+      console.error(e);
+    } finally {
+      hideSpinner();
+    }
+  }
+
+  acSelect.addEventListener('change', () => {
+    const selected = acSelect.value;
+    if (selected === 'all') {
+      data = allData;
+      filtered = data;
+      currentPage = 1;
+      filterData();
+      renderPage();
+      statusEl.textContent = `✅ सभी क्षेत्रों से ${data.length} रिकॉर्ड लोड हुए`;
+      statusEl.classList.remove('loading');
+      statusEl.classList.add('loaded');
+    } else {
+      loadSelectedAC(selected);
+    }
+  });
+
+  function filterData() {
+    const nameQuery   = normalize(searchBox.value);
+    const oldAcQuery  = normalize(oldAcInput.value);
+    const partNoQuery = normalize(partNoInput.value);
+
+    filtered = data.filter(row => {
+      const rowOldAc   = normalize(row['Old AC No.']);
+      const rowPartNo  = normalize(row['Part No.']);
+      const rowName    = normalize(row['Name']);
+      const rowRelative= normalize(row['Relative Name']);
+      const rowEpic    = normalize(row['EPIC']);
+
+      const matchName =
+        nameQuery === '' ||
+        rowName.includes(nameQuery) ||
+        rowRelative.includes(nameQuery) ||
+        rowEpic.includes(nameQuery);
+
+      const matchOldAc  = oldAcQuery === ''  || rowOldAc === oldAcQuery;
+      const matchPartNo = partNoQuery === '' || rowPartNo === partNoQuery;
+
+      return matchName && matchOldAc && matchPartNo;
+    });
+  }
+
+  function renderPage() {
+    tableBody.innerHTML = '';
+    const start = (currentPage - 1) * resultsPerPage;
+    const end   = start + resultsPerPage;
+    const pageData = filtered.slice(start, end);
+
+    if (pageData.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="8">कोई परिणाम नहीं मिला</td></tr>';
+      pagination.innerHTML = '';
+      return;
+    }
+
+    pageData.forEach(row => {
+      const tr = document.createElement('tr');
+      ['Old AC No.', 'Part No.', 'S. NO.', 'H. NO.', 'Name', 'Relative Name', 'Age', 'EPIC'].forEach(key => {
+        const td = document.createElement('td');
+        td.textContent = row[key] ?? '';
+        tr.appendChild(td);
+      });
+      tableBody.appendChild(tr);
+    });
+
+    updatePaginationControls();
+  }
+
+  function updatePaginationControls() {
+    pagination.innerHTML = '';
+    const totalPages = Math.ceil(filtered.length / resultsPerPage);
+    if (totalPages <= 1) return;
+
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '⬅️ पिछला';
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.onclick = () => { currentPage--; renderPage(); };
+
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '➡️ अगला';
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.onclick = () => { currentPage++; renderPage(); };
+
+    pagination.appendChild(prevBtn);
+    pagination.appendChild(document.createTextNode(` पेज ${currentPage} / ${totalPages} `));
+    pagination.appendChild(nextBtn);
+  }
+
+  function triggerSearch() {
+    currentPage = 1;
+    filterData();
+    renderPage();
+  }
+
+  // Debounced search
+  searchBox.addEventListener('input', () => {
+    clearTimeout(window.debounceTimer);
+    window.debounceTimer = setTimeout(triggerSearch, 300);
+  });
+
+  oldAcInput.addEventListener('input', triggerSearch);
+  partNoInput.addEventListener('input', triggerSearch);
+
+  // Initial load
+  loadAllData();
+</script>
+
+</body>
+</html>
