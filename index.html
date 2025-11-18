@@ -100,6 +100,14 @@
       border-top: 1px solid #ccc;
       background-color: #f1f1f1;
     }
+
+    /* Highlight style */
+    mark {
+      background-color: yellow;
+      color: black;
+      font-weight: bold;
+      padding: 0 1px;
+    }
   </style>
 </head>
 <body>
@@ -285,6 +293,16 @@
     });
   }
 
+  /* Highlight helper: wraps matched substring in <mark> */
+  function highlightMatch(text, query) {
+    if (!text) return '';
+    if (!query) return text;
+    // Escape regex special characters in query
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    return String(text).replace(regex, '<mark>$1</mark>');
+  }
+
   function renderPage() {
     tableBody.innerHTML = '';
     const start = (currentPage - 1) * resultsPerPage;
@@ -297,11 +315,29 @@
       return;
     }
 
+    // Current queries (already lowercased and trimmed in normalize used for filter)
+    const queries = {
+      'Old AC No.': normalize(oldAcInput.value),
+      'Part No.': normalize(partNoInput.value),
+      'Name': normalize(nameInput.value),
+      'Relative Name': normalize(relativeInput.value),
+      'EPIC': normalize(epicInput.value)
+    };
+
     pageData.forEach(row => {
       const tr = document.createElement('tr');
       ['Old AC No.', 'Part No.', 'S. NO.', 'H. NO.', 'Name', 'Relative Name', 'Age', 'EPIC'].forEach(key => {
         const td = document.createElement('td');
-        td.textContent = row[key] ?? '';
+        const raw = row[key] ?? '';
+
+        // Apply highlighting only to searchable columns
+        if (key in queries && queries[key]) {
+          // We need a case-insensitive highlight while preserving original casing in display.
+          // highlightMatch uses a case-insensitive regex and keeps original text via $1.
+          td.innerHTML = highlightMatch(String(raw), queries[key]);
+        } else {
+          td.textContent = raw;
+        }
         tr.appendChild(td);
       });
       tableBody.appendChild(tr);
